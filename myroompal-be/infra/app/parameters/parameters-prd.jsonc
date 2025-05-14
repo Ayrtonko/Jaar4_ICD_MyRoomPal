@@ -1,0 +1,27 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "webAppName": {
+      "value": "myroompal"
+    },
+    "environment": {
+      "value": "prd"
+    },
+    "sku": {
+      "value": "F1"
+    },
+    "sqlDbName":{
+      "value": "myroompal-prd-database"
+    },
+    "sqlServerName":{
+      "value": "myroompal-prd-dbserver"
+    },
+    "sqlAdminLoginKeyName":{
+      "value": "sqlAdminLoginKeyName-prd"
+    },
+    "sqlConnectionStringKeyName":{
+      "value": "sqlConnectionStringKey-prd"
+    }
+  }
+}

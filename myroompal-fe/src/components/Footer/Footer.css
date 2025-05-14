@@ -1,0 +1,20 @@
+.footer-title {
+    color: white !important;
+  }
+
+  .footer-link {
+    color: #ddd !important; /* Begin met iets minder wit */
+    text-decoration: none !important; /* Geen onderstreping */
+    transition: color 0.3s ease; /* Soepele overgang bij kleurverandering */
+  }
+  
+  .footer-link:hover {
+    color: #fff !important; /* Volledig wit bij hover */
+  }
+  
+  .footer-link:active {
+    color: #f5f5f5 !important; /* Bijna wit bij klikken */
+  }
+  
+  
+  

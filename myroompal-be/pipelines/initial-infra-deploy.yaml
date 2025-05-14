@@ -1,0 +1,73 @@
+trigger:
+  branches:
+    include:
+      - 'main'
+  paths:
+    include:
+    - pipelines/initial-infra-deploy.yaml
+
+variables:
+  serviceConnection: 'rg-se-vt-s7-group7'
+  resourceGroupName: 'rg-se-vt-s7-group7'
+  location: 'westeurope'
+  keyVaultName: 'myroompal-keyv'
+  tenantId: 'a2586b9b-f867-4b3c-9363-5b435c5dbc45'
+
+stages:
+  - stage: Validate_Publish_Bicep
+    jobs:
+      - job: Validate_Bicep_File
+        steps:
+          - script: az bicep build --file infra/initial/main.bicep
+          - task: AzureCLI@2
+            displayName: 'Validate Bicep File'
+            inputs:
+              azureSubscription: $(serviceConnection)
+              scriptType: pscore
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                az deployment group validate --resource-group rg-se-vt-s7-group7 --template-file infra/initial/main.bicep
+                
+      - job: Publish_Bicep_File
+        dependsOn: Validate_Bicep_File
+        steps:
+          - task: CopyFiles@2
+            displayName: "Copy Bicep Files"
+            inputs:
+              SourceFolder: "infra/initial"
+              Contents: "**/*.bicep"
+              TargetFolder: "$(Build.ArtifactStagingDirectory)/ARMTemplates"
+              OverWrite: true
+              
+          - task: PublishPipelineArtifact@1
+            displayName: "Publish Artifact"
+            inputs:
+              targetPath: "$(Build.ArtifactStagingDirectory)/ARMTemplates"
+              artifactName: "backend-infra-keyvault"
+              publishLocation: pipeline
+                
+  - stage: Deploy_Infra
+    jobs:
+      - deployment: Deploy_Infra
+        environment: Infra
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: DownloadPipelineArtifact@2
+                  inputs:
+                    artifact: backend-infra-keyvault
+                    path: $(Pipeline.Workspace)/infra/initial
+                - task: AzureResourceManagerTemplateDeployment@3
+                  inputs:
+                    deploymentScope: "Resource Group"
+                    azureResourceManagerConnection: "rg-se-vt-s7-group7"
+                    subscriptionId: 'fef0d2c1-7999-4146-924e-93623bc4faab'
+                    action: "Create Or Update Resource Group"
+                    resourceGroupName: 'rg-se-vt-s7-group7'
+                    location: 'West Europe'
+                    templateLocation: 'Linked artifact'
+                    csmFile: "$(Pipeline.Workspace)/infra/initial/**/main.bicep"
+                    csmParameterFile: "$(Pipeline.Workspace)/infra/initial/**/parameters-tst.jsonc"
+                    deploymentMode: "Incremental"
+                    deploymetName: "MyRoomPal-Keyvault-Deployment"  

@@ -1,0 +1,127 @@
+@import "/src/scss/definitions";
+
+.refresh-btn {
+  background-color: transparent !important;
+  border: none;
+
+  &:hover {
+    background-color: rgba(128, 128, 128, 0.1) !important;
+  }
+}
+
+.match-btn-active {
+  color: black !important;
+  background-color: transparent !important;
+  border-color: $color-primary-lightblue !important;
+  border: none;
+  border-bottom: 5px solid;
+  border-radius: 0;
+
+  &:hover {
+    background-color: rgba(128, 128, 128, 0.1) !important;
+    border-color: $color-primary-lightblue !important;
+
+  }
+
+  &:focus {
+    border-color: $color-primary-lightblue !important;
+  }
+
+  &:active {
+    border-color: $color-primary-lightblue !important;
+  }
+
+  &:checked {
+    border-color: $color-primary-lightblue !important;
+  }
+}
+
+.match-btn-inactive {
+  color: black !important;
+  background-color: transparent !important;
+  border: none !important;
+  border-radius: 0;
+
+  &:hover {
+    background-color: rgba(128, 128, 128, 0.1) !important;
+  }
+
+  &:focus {
+    border-color: $color-primary-lightblue !important;
+  }
+
+  &:active {
+    border-color: $color-primary-lightblue !important;
+  }
+
+  &:checked {
+    border-color: $color-primary-lightblue !important;
+  }
+}
+
+
+.user-icon {
+  padding: 10px 10px 10px 10px;
+  border-radius: 40px 0 0 40px;
+  line-height: 0;
+  background: $color-primary-darkblue;
+  border: 1px solid $color-primary-darkblue;
+  border-right-style: none;
+}
+
+.user-card {
+  padding: 10px 10px 10px 10px;
+  border: 1px solid;
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+}
+
+.pref-btn-inactive {
+  color: black !important;
+  background-color: $color-primary-white;
+  border-color: $color-primary-darkblue;
+
+  &:hover {
+    color: white;
+    background-color: rgba(128, 128, 128, 0.1);
+    border-color: $color-primary-darkblue;
+  }
+
+  &:focus {
+    outline: 2px solid $color-primary-lightblue;
+    background-color: rgba(128, 128, 128, 0.1);
+  }
+
+  &:active {
+    color: $color-primary-white !important;
+    background-color: $color-primary-green !important;
+    border-color: $color-primary-green !important;
+  }
+}
+
+.pref-btn-active {
+  color: white;
+  background-color: $color-primary-green;
+  border-color: $color-primary-green;
+
+
+  &:hover {
+    color: white;
+    background-color: $color-primary-green;
+    border-color: $color-primary-green;
+  }
+
+  &:focus {
+    color: white;
+    outline: 2px solid $color-primary-green;
+    background-color: $color-primary-green !important;
+    border-color: $color-primary-green;
+
+  }
+
+  &:active {
+    color: white;
+    background-color: $color-primary-green !important;
+    border-color: $color-primary-green !important;
+  }
+}

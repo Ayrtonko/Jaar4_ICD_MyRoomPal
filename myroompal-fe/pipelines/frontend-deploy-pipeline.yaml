@@ -1,0 +1,302 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+  demands: npm
+
+variables:
+  - name: isMain
+    value: $[eq(variables['Build.SourceBranch'], 'refs/heads/main')]
+
+stages:
+  - stage: Scan
+    jobs:
+      - job: 'Scan_For_Secrets'
+        displayName: 'Scan for secrets'
+        steps:
+          - task: Gitleaks@2
+            inputs:
+              scanlocation: '$(Build.SourcesDirectory)'
+              configtype: 'predefined'
+              predefinedconfigfile: 'GitleaksUdmCombo.toml'
+              scanmode: 'nogit'
+              reportformat: 'sarif'
+
+  - stage: Build
+    jobs:
+      - job: Build_Test
+        steps:
+          - powershell: |
+              $currentHour = (Get-Date).Hour
+              if ($currentHour -ge 8 -and $currentHour -lt 21) {
+                Write-Host "##vso[task.setvariable variable=isWithinWorkingHours]true"
+              } else {
+                Write-Host "##vso[task.setvariable variable=isWithinWorkingHours]false"
+              }
+            displayName: 'Set working hours variable'
+          - task: SonarQubePrepare@7
+            condition: and(succeeded(), eq(variables['isMain'], 'true'), eq(variables['isWithinWorkingHours'], 'true'), eq(variables['EnableSonarQube'], 'true'))
+            inputs:
+              SonarQube: 'SonarQube'
+              scannerMode: 'CLI'
+              cliVersion: '6.2.1.4610'
+              configMode: 'manual'
+              cliProjectkey: '$(SonarQubeProjectKey)'
+
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '20.x'
+            displayName: 'Install Node.js'
+
+          - task: Npm@1
+            displayName: 'Install npm'
+            inputs:
+              command: 'install'
+
+          - task: Npm@1
+            displayName: 'Build project'
+            inputs:
+              command: 'custom'
+              customCommand: 'run build'
+
+          - task: CopyFiles@2
+            displayName: 'Copy Build'
+            inputs:
+              SourceFolder: '$(System.DefaultWorkingDirectory)/build'
+              Contents: '**'
+              TargetFolder: '$(Build.ArtifactStagingDirectory)/app'
+              CleanTargetFolder: true
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Artifact'
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)/app'
+              artifact: 'drop'
+
+          - task: Npm@1
+            displayName: 'Run Tests'
+            inputs:
+              command: 'custom'
+              customCommand: 'run test -- --watchAll=false'
+
+          - task: SonarQubeAnalyze@7
+            condition: and(succeeded(), eq(variables['isMain'], 'true'), eq(variables['isWithinWorkingHours'], 'true'), eq(variables['EnableSonarQube'], 'true'))
+
+
+          - task: SonarQubePublish@7
+            condition: and(succeeded(), eq(variables['isMain'], 'true'), eq(variables['isWithinWorkingHours'], 'true'), eq(variables['EnableSonarQube'], 'true'))
+            inputs:
+              pollingTimeoutSec: '300'
+
+          - task: WhiteSource@21
+            inputs:
+              cwd: '$(System.DefaultWorkingDirectory)'
+
+      - job: Validate_Bicep_File
+        steps:
+          - script: az bicep build --file infra/app/main.bicep
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: "rg-se-vt-s7-group7"
+              scriptType: pscore
+              scriptLocation: "inlineScript"
+              inlineSCript: |
+                az deployment group validate --resource-group rg-se-vt-s7-group7 --template-file infra/app/main.bicep --parameters infra/app/parameters/parameters-tst.jsonc
+
+          - task: CopyFiles@2
+            displayName: "Copy Bicep Files"
+            inputs:
+              SourceFolder: "infra/app"
+              Contents: "**/*.bicep"
+              TargetFolder: "$(Build.ArtifactStagingDirectory)/ARMTemplates"
+              OverWrite: true
+
+          - task: CopyFiles@2
+            displayName: "Copy Parameter Files"
+            inputs:
+              SourceFolder: "infra/app/parameters"
+              Contents: "**/*.jsonc"
+              TargetFolder: "$(Build.ArtifactStagingDirectory)/ARMTemplates"
+              OverWrite: true
+
+          - task: PublishPipelineArtifact@1
+            displayName: "Publish Artifact"
+            inputs:
+              targetPath: "$(Build.ArtifactStagingDirectory)/ARMTemplates"
+              artifactName: "frontend-infra"
+              publishLocation: pipeline
+
+  - stage: Deploy_Tst
+    dependsOn: Build
+    condition: and(succeeded(), eq(variables.isMain, true))
+    variables:
+      environment: 'tst'
+    jobs:
+      - deployment: DeployFrontend_Tst
+        environment: 'Test'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: DownloadPipelineArtifact@2
+                  inputs:
+                    artifact: frontend-infra
+                    path: $(Pipeline.Workspace)/infra/app
+
+                - task: AzureResourceManagerTemplateDeployment@3
+                  inputs:
+                    deploymentScope: "Resource Group"
+                    azureResourceManagerConnection: "rg-se-vt-s7-group7"
+                    subscriptionId: 'fef0d2c1-7999-4146-924e-93623bc4faab'
+                    action: "Create Or Update Resource Group"
+                    resourceGroupName: 'rg-se-vt-s7-group7'
+                    location: 'West Europe'
+                    templateLocation: 'Linked artifact'
+                    csmFile: "$(Pipeline.Workspace)/infra/app/**/main.bicep"
+                    csmParametersFile: "$(Pipeline.Workspace)/infra/app/**/parameters-tst.jsonc"
+                    deploymentMode: "Incremental"
+                    deploymentName: "MyRoomPal-FrontEnd"
+
+                - task: AzureCLI@2
+                  inputs:
+                    azureSubscription: 'rg-se-vt-s7-group7'
+                    scriptType: 'pscore'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      $response = az rest --method post --url "/subscriptions/fef0d2c1-7999-4146-924e-93623bc4faab/resourcegroups/rg-se-vt-s7-group7/providers/Microsoft.Web/staticSites/myroompal-fe-tst/listsecrets?api-version=2020-06-01" --output json
+                      $token = ($response | ConvertFrom-Json).properties.apiKey
+                      Write-Host "##vso[task.setvariable variable=AzureStaticWebAppsApiToken;issecret=true]$token"
+                    useGlobalConfig: true
+
+                - task: DownloadPipelineArtifact@2
+                  inputs:
+                    artifact: 'drop'
+                    path: '$(Pipeline.Workspace)/app'
+
+                - task: AzureKeyVault@2
+                  displayName: 'Azure Key Vault: Get Secrets'
+                  inputs:
+                    azureSubscription: 'rg-se-vt-s7-group7'
+                    KeyvaultName: 'myroompal-kv'
+                    SecretsFilter: 'Auth0-Audiencetst,Auth0-Domaintst,Auth0-ClientIdtst'
+                    RunAsPreJob: false
+
+                - powershell: |
+                    Write-Host "##vso[task.setvariable variable=Auth0-Audience]$(Auth0-Audiencetst)"
+                    Write-Host "##vso[task.setvariable variable=Auth0-Domain]$(Auth0-Domaintst)"
+                    Write-Host "##vso[task.setvariable variable=Auth0-ClientId]$(Auth0-ClientIdtst)"
+                  displayName: 'Set pipeline variables after fetching secrets'
+
+                - task: qetza.replacetokens.replacetokens-task.replacetokens@5
+                  displayName: 'Replace tokens in config.js'
+                  inputs:
+                    rootDirectory: '$(Pipeline.Workspace)/app'
+                    targetFiles: |
+                      **/settings.json
+                      settings.json
+                      **/main.*.js
+                      main.*.js
+                      staticwebapp.config.json
+                      web.config
+                    encoding: 'auto'
+                    tokenPattern: 'default'
+                    writeBOM: true
+                    actionOnMissing: 'fail'
+                    keepToken: false
+
+                - task: AzureStaticWebApp@0
+                  inputs:
+                    workingDirectory: '$(Pipeline.Workspace)'
+                    app_location: app
+                    skip_app_build: true
+                    skip_api_build: true
+                    azure_static_web_apps_api_token: '$(AzureStaticWebAppsApiToken)'
+
+  - stage: Deploy_Prd
+    dependsOn: Deploy_Tst
+    condition: and(succeeded(), eq(variables.isMain, true))
+    variables:
+      environment: 'prd'
+    jobs:
+      - deployment: DeployFrontend_Prd
+        environment: 'Production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: DownloadPipelineArtifact@2
+                  inputs:
+                    artifact: frontend-infra
+                    path: $(Pipeline.Workspace)/infra/app
+
+                - task: AzureResourceManagerTemplateDeployment@3
+                  inputs:
+                    deploymentScope: "Resource Group"
+                    azureResourceManagerConnection: "rg-se-vt-s7-group7"
+                    subscriptionId: 'fef0d2c1-7999-4146-924e-93623bc4faab'
+                    action: "Create Or Update Resource Group"
+                    resourceGroupName: 'rg-se-vt-s7-group7'
+                    location: 'West Europe'
+                    templateLocation: 'Linked artifact'
+                    csmFile: "$(Pipeline.Workspace)/infra/app/**/main.bicep"
+                    csmParametersFile: "$(Pipeline.Workspace)/infra/app/**/parameters-prd.jsonc"
+                    deploymentMode: "Incremental"
+                    deploymentName: "MyRoomPal-FrontEnd"
+
+                - task: AzureCLI@2
+                  inputs:
+                    azureSubscription: 'rg-se-vt-s7-group7'
+                    scriptType: 'pscore'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      $response = az rest --method post --url "/subscriptions/fef0d2c1-7999-4146-924e-93623bc4faab/resourcegroups/rg-se-vt-s7-group7/providers/Microsoft.Web/staticSites/myroompal-fe-prd/listsecrets?api-version=2020-06-01" --output json
+                      $token = ($response | ConvertFrom-Json).properties.apiKey
+                      Write-Host "##vso[task.setvariable variable=AzureStaticWebAppsApiToken;issecret=true]$token"
+                    useGlobalConfig: true
+
+                - task: DownloadPipelineArtifact@2
+                  inputs:
+                    artifact: 'drop'
+                    path: '$(Pipeline.Workspace)/app'
+
+                - task: AzureKeyVault@2
+                  displayName: 'Azure Key Vault: Get Secrets'
+                  inputs:
+                    azureSubscription: 'rg-se-vt-s7-group7'
+                    KeyvaultName: 'myroompal-kv'
+                    SecretsFilter: 'Auth0-Audienceprd,Auth0-Domainprd, Auth0-ClientIdprd'
+                    RunAsPreJob: false
+
+                - powershell: |
+                    Write-Host "##vso[task.setvariable variable=Auth0-Audience]$(Auth0-Audienceprd)"
+                    Write-Host "##vso[task.setvariable variable=Auth0-Domain]$(Auth0-Domainprd)"
+                    Write-Host "##vso[task.setvariable variable=Auth0-ClientId]$(Auth0-ClientIdprd)"
+                  displayName: 'Set pipeline variables after fetching secrets'
+
+                - task: qetza.replacetokens.replacetokens-task.replacetokens@5
+                  displayName: 'Replace tokens in config.js'
+                  inputs:
+                    rootDirectory: '$(Pipeline.Workspace)/app'
+                    targetFiles: |
+                      **/settings.json
+                      settings.json
+                      **/main.*.js
+                      main.*.js
+                      staticwebapp.config.json
+                      web.config
+                    encoding: 'auto'
+                    tokenPattern: 'default'
+                    writeBOM: true
+                    actionOnMissing: 'fail'
+                    keepToken: false
+
+                - task: AzureStaticWebApp@0
+                  inputs:
+                    workingDirectory: '$(Pipeline.Workspace)'
+                    app_location: app
+                    skip_app_build: true
+                    skip_api_build: true
+                    azure_static_web_apps_api_token: '$(AzureStaticWebAppsApiToken)'

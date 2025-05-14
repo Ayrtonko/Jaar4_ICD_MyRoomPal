@@ -1,0 +1,91 @@
+.intro{
+    text-align: center;
+}
+
+.Title-listing{
+    font-size: 100px;
+    text-shadow: 1px 1px 2px black;
+    font-weight: 500;
+}
+
+.Logo{
+    width: 500px;
+    padding: 20px;
+}
+
+.Listening-info, .Amenities-info{
+    padding: 20px;
+    background-color: #F0F7FB;
+
+}
+
+.Personal-info{
+    padding: 20px;
+}
+
+.upload-image {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+  }
+
+.Room, .Person, .Amenities{
+    width: 100px;
+    height: 100px;
+    display: block; 
+    margin-left: auto; 
+    margin-right: 20;
+  }
+
+
+
+.checkbox-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px; 
+    justify-content: space-between;
+  }
+  
+
+  .checkbox-item {
+    display: flex;
+    align-items: center;
+    flex: 0 0 calc(33.33% - 20px);
+  }
+  
+
+  .checkbox-item input[type="checkbox"] {
+    width: 30px;
+    height: 30px;
+    margin-right: 10px;
+  }
+  
+  .checkbox-item label {
+    font-size: 20px;
+
+  }
+  
+  .rounded-2{
+    background-color: #17A2ED;
+    border: #17A2ED;
+    color: white;
+    padding: 15px 30px; 
+    font-size: 30px;
+
+  }
+
+  .logo-container {
+    display: flex;
+    justify-content: center; 
+    align-items: center;    
+    flex-direction: column;  
+    margin-top: 20px;       
+  }
+  
+  .NameLogo {
+    width: 500px;
+    padding: 20px; 
+    margin-top: 20px; 
+  }
+  

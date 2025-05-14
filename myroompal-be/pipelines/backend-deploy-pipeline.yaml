@@ -1,0 +1,214 @@
+trigger:
+
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - name: isMain
+    value: $[eq(variables['Build.SourceBranch'], 'refs/heads/main')]
+
+stages:
+  # - stage: Scan
+  #   jobs:        
+      # - job: 'Scan_For_Secrets'
+      #   displayName: 'Scan for secrets'
+      #   steps:
+      #     - task: Gitleaks@2
+      #       inputs:
+      #         scanlocation: '$(Build.SourcesDirectory)'
+      #         configtype: 'predefined'
+      #         predefinedconfigfile: 'GitleaksUdmCombo.toml'
+      #         scanmode: 'nogit'
+      #         reportformat: 'sarif'
+          
+  - stage: Build
+    jobs:
+      - job: Build_Test
+        displayName: 'Build and Test'
+        steps:
+          - powershell: |
+              $currentHour = (Get-Date).Hour
+              if ($currentHour -ge 8 -and $currentHour -lt 21) {
+                Write-Host "##vso[task.setvariable variable=isWithinWorkingHours]true"
+              } else {
+                Write-Host "##vso[task.setvariable variable=isWithinWorkingHours]false"
+              }
+            displayName: 'Set working hours variable'
+
+          - task: SonarQubePrepare@7
+            condition: and(succeeded(), eq(variables['isMain'], 'true'), eq(variables['isWithinWorkingHours'], 'true'), eq(variables['EnableSonarQube'], 'true'))
+            inputs:
+             SonarQube: 'SonarQube'
+             scannerMode: 'dotnet'
+             projectKey: '$(SonarQubeProjectKey)'
+              
+          - task: UseDotNet@2
+            inputs:
+              packageType: 'sdk'
+              version: '8.x'
+              performMultiLevelLookup: true
+              includePreviewVersions: true # Required for preview versions
+              
+          - task: DotNetCoreCLI@2
+            displayName: 'Restore'
+            inputs:
+              command: 'restore'
+              
+          - task: DotNetCoreCLI@2
+            displayName: 'Build'
+            inputs:
+              command: 'build'
+              projects: '**/*.csproj'
+              arguments: '--configuration Release'
+              
+          - task: DotNetCoreCLI@2
+            displayName: 'Test'
+            inputs:
+              command: 'test'
+              projects: '**/*Tests/*.csproj'
+              arguments: '--configuration Release --collect "Code coverage"'
+              
+          - task: DotNetCoreCLI@2
+            inputs:
+              command: publish
+              publishWebProjects: True
+              arguments: '--configuration Release --output $(Build.ArtifactStagingDirectory)/app'
+              zipAfterPublish: True
+              CleanTargetFolder: True
+              
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)/app'
+              artifact: 'drop'
+
+          - task: SonarQubeAnalyze@7
+            condition: and(succeeded(), eq(variables['isMain'], 'true'), eq(variables['isWithinWorkingHours'], 'true'), eq(variables['EnableSonarQube'], 'true'))
+
+          - task: SonarQubePublish@7
+            condition: and(succeeded(), eq(variables['isMain'], 'true'), eq(variables['isWithinWorkingHours'], 'true'), eq(variables['EnableSonarQube'], 'true'))
+            inputs:
+              pollingTimeoutSec: '300'
+              
+          - task: WhiteSource@21
+            inputs:
+              cwd: '$(System.DefaultWorkingDirectory)'
+      
+      - job: Validate_Bicep_File
+        steps:
+          - script: az bicep build --file infra/app/main.bicep
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: "rg-se-vt-s7-group7"
+              scriptType: pscore
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                az deployment group validate --resource-group rg-se-vt-s7-group7 --template-file infra/app/main.bicep --parameters infra/app/parameters/parameters-tst.jsonc
+                
+          - task: CopyFiles@2
+            displayName: "Copy Bicep Files"
+            inputs:
+              SourceFolder: "infra/app"
+              Contents: "**/*.bicep"
+              TargetFolder: "$(Build.ArtifactStagingDirectory)/ARMTemplates"
+              OverWrite: true
+              
+          - task: CopyFiles@2
+            displayName: "Copy Parameter Files"
+            inputs:
+              SourceFolder: "infra/app/parameters"
+              Contents: "**/*.jsonc"
+              TargetFolder: "$(Build.ArtifactStagingDirectory)/ARMTemplates"
+              OverWrite: true
+              
+          - task: PublishPipelineArtifact@1
+            displayName: "Publish Artifact"
+            inputs:
+              targetPath: "$(Build.ArtifactStagingDirectory)/ARMTemplates"
+              artifactName: "backend-infra"
+              publishLocation: pipeline
+              
+  - stage: Deploy_Tst
+    dependsOn: Build
+    condition: and(succeeded(), eq(variables['isMain'], 'true'))
+    jobs:      
+      - deployment: Deploy_Test
+        environment: Test
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: DownloadPipelineArtifact@2
+                  inputs:
+                    artifact: backend-infra
+                    path: $(Pipeline.Workspace)/infra/app
+                - task: AzureResourceManagerTemplateDeployment@3
+                  inputs:
+                    deploymentScope: "Resource Group"
+                    azureResourceManagerConnection: "rg-se-vt-s7-group7"
+                    subscriptionId: 'fef0d2c1-7999-4146-924e-93623bc4faab'
+                    action: "Create Or Update Resource Group"
+                    resourceGroupName: 'rg-se-vt-s7-group7'
+                    location: 'West Europe'
+                    templateLocation: 'Linked artifact'
+                    csmFile: "$(Pipeline.Workspace)/infra/app/**/main.bicep"
+                    csmParametersFile: "$(Pipeline.Workspace)/infra/app/**/parameters-tst.jsonc"
+                    deploymentMode: "Incremental"
+                    deploymentName: "MyRoomPal-Backend"
+                - task: DownloadPipelineArtifact@2
+                  inputs:
+                    artifact: 'drop'
+                    path: '$(Pipeline.Workspace)/app'
+                - task: AzureRmWebAppDeployment@4
+                  displayName: "Deploy app to azure"
+                  inputs:
+                    ConnectionType: "AzureRM"
+                    azureSubscription: "rg-se-vt-s7-group7"
+                    appType: "webApp"
+                    WebAppName: "myroompal-tst-api"
+                    packageForLinux: "$(Pipeline.Workspace)/app/**/myroompal-api.zip"
+                    JSONFiles: "**/appsettings.json"
+                    
+  - stage: Deploy_Prd
+    dependsOn: Deploy_Tst
+    condition: and(succeeded(), eq(variables['isMain'], 'true'))
+    jobs:
+      - deployment: Deploy_Prd
+        environment: Production
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: DownloadPipelineArtifact@2
+                  inputs:
+                    artifact: backend-infra
+                    path: $(Pipeline.Workspace)/infra/app
+                - task: AzureResourceManagerTemplateDeployment@3
+                  inputs:
+                    deploymentScope: "Resource Group"
+                    azureResourceManagerConnection: "rg-se-vt-s7-group7"
+                    subscriptionId: 'fef0d2c1-7999-4146-924e-93623bc4faab'
+                    action: "Create Or Update Resource Group"
+                    resourceGroupName: 'rg-se-vt-s7-group7'
+                    location: 'West Europe'
+                    templateLocation: 'Linked artifact'
+                    csmFile: "$(Pipeline.Workspace)/infra/app/**/main.bicep"
+                    csmParametersFile: "$(Pipeline.Workspace)/infra/app/**/parameters-prd.jsonc"
+                    deploymentMode: "Incremental"
+                    deploymentName: "MyRoomPal-Backend"
+                - task: DownloadPipelineArtifact@2
+                  inputs:
+                    artifact: 'drop'
+                    path: '$(Pipeline.Workspace)/app'
+                - task: AzureRmWebAppDeployment@4
+                  displayName: "Deploy app to azure"
+                  inputs:
+                    ConnectionType: "AzureRM"
+                    azureSubscription: "rg-se-vt-s7-group7"
+                    appType: "webApp"
+                    WebAppName: "myroompal-prd-api"
+                    packageForLinux: "$(Pipeline.Workspace)/app/**/myroompal-api.zip"
+                    JSONFiles: "**/appsettings.json"

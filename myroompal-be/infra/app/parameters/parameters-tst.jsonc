@@ -1,0 +1,27 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "webAppName": {
+      "value": "myroompal"
+    },
+    "environment": {
+      "value": "tst"
+    },
+    "sku": {
+      "value": "F1"
+    },
+    "sqlDbName":{
+      "value": "myroompal-tst-database"
+    },
+    "sqlServerName":{
+      "value": "myroompal-tst-dbserver"
+    },
+    "sqlAdminLoginKeyName":{
+      "value": "sqlAdminLoginKeyName-tst"
+    },
+    "sqlConnectionStringKeyName":{
+      "value": "sqlConnectionStringKey-tst"
+    }
+  }
+}

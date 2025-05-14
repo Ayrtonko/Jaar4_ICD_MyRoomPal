@@ -1,0 +1,46 @@
+@import "../../node_modules/bootstrap/scss/functions";
+@import "../../node_modules/bootstrap/scss/variables";
+@import "../../node_modules/bootstrap/scss/mixins";
+
+//primary colors
+$color-primary-orange: #EE8330;
+$color-primary-lightblue: #18A2DB;
+$color-primary-darkblue: #093A55;
+$color-primary-green: #16AD56;
+
+$color-primary-babyblue: #F0F7FB;
+
+$color-primary-white: white;
+$color-primary-black: black;
+
+$custom-theme-colors: map-merge($theme-colors, (
+                "primary": $color-primary-lightblue,
+                "secondary": $color-primary-orange,
+                "darkblue": $color-primary-darkblue,
+                "babyblue": $color-primary-babyblue,
+                "green": $color-primary-green,
+                "white": $color-primary-white,
+
+));
+
+$theme-colors: map-merge($theme-colors, $custom-theme-colors);
+
+$custom-table-variants: (
+    "darkblue": $color-primary-darkblue,
+    "default": #F0F7FB
+);
+
+$table-variants: map-merge($table-variants, $custom-table-variants);
+
+$display-font-sizes: (
+        0: 6rem,
+        1: 5rem,
+        2: 4.5rem,
+        3: 4rem,
+        4: 3.5rem,
+        5: 3rem,
+        6: 2.5rem,
+);
+
+$display-font-weight: 600;
+@import "../../node_modules/bootstrap/scss/bootstrap";
