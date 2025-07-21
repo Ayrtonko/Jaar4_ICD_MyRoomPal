@@ -12,18 +12,18 @@ variables:
     value: $[eq(variables['Build.SourceBranch'], 'refs/heads/main')]
 
 stages:
-  # - stage: Scan
-  #   jobs:        
-      # - job: 'Scan_For_Secrets'
-      #   displayName: 'Scan for secrets'
-      #   steps:
-      #     - task: Gitleaks@2
-      #       inputs:
-      #         scanlocation: '$(Build.SourcesDirectory)'
-      #         configtype: 'predefined'
-      #         predefinedconfigfile: 'GitleaksUdmCombo.toml'
-      #         scanmode: 'nogit'
-      #         reportformat: 'sarif'
+   - stage: Scan
+     jobs:        
+       - job: 'Scan_For_Secrets'
+         displayName: 'Scan for secrets'
+         steps:
+           - task: Gitleaks@2
+             inputs:
+               scanlocation: '$(Build.SourcesDirectory)'
+               configtype: 'predefined'
+               predefinedconfigfile: 'GitleaksUdmCombo.toml'
+               scanmode: 'nogit'
+               reportformat: 'sarif'
           
   - stage: Build
     jobs:
