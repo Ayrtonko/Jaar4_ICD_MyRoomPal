@@ -43,6 +43,7 @@ This project demonstrates end-to-end delivery across **frontend, backend, data m
 - **Testing**
   - Wrote **unit tests** for business logic and components where feasible.
   - Wrote **integration tests** to validate critical API flows end-to-end.
+  - Wrote **Cypress end-to-end (E2E) tests** to validate key user journeys in the browser.
   - Due to time constraints, overall test coverage is **partial** (documented below as a future improvement).
 
 ---
@@ -110,11 +111,11 @@ If you are reviewing this repository for code quality and engineering approach, 
 - **Backend (ASP.NET Core):** [`myroompal-be/myroompal-api/Modules`](myroompal-be/myroompal-api/Modules)  
   Endpoint design, layering/modularity, validation/error handling patterns.
 
-- **Data model (EF Core):** typically under [`myroompal-be/myroompal-api`](myroompal-be/myroompal-api)  
+- **Data model (EF Core):** [`myroompal-be/myroompal-api`](myroompal-be/myroompal-api)  
   Entities, Data and migrations.
 
-- **Tests:** typically alongside the backend and/or in dedicated test projects under [`myroompal-be/MyRoomPal.Tests`](myroompal-be/MyRoomPal.Tests)  
-  Unit + integration tests (partial coverage due to time constraints).
+- **Tests:** [`myroompal-be/MyRoomPal.Tests`](myroompal-be/MyRoomPal.Tests) and [`myroompal-fe/cypress`](myroompal-fe/cypress)  
+  Cypress, Unit, integration tests (partial coverage due to time constraints).
 
 - **Database documentation:** see Diagrams for the ERD (Visual Paradigm).
 
