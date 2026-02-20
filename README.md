@@ -135,7 +135,3 @@ If you are reviewing this repository for code quality and engineering approach, 
 - Secure secret management with Key Vault
 - Architecture communication using C4 (up to component level)
 - CI/CD experience via Azure DevOps
-
----
-
-## Screenshots
